@@ -26,18 +26,35 @@ dependencies {
 //    compile 'org.ros.android_core:android_honeycomb_mr2:0.1.+'
     compile project(':opencv3')
     compile project(':cv_bridge')
+
+    compile fileTree(include: ['*.jar'], dir: 'libs')
+//    androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
+//        exclude group: 'com.android.support', module: 'support-annotations'
+//    })
+    compile 'joda-time:joda-time:2.9.4'
+    compile 'junit:junit:4.12'
+//    compile files('libs/guava-22.0-android.jar')
+    compile files('libs/commons-math3-3.6.1.jar')
+//    compile 'com.google.android.gms:play-services-location:17.0.0'
+//    compile files('libs/commons-codec-1.10.jar')
+    compile files('libs/asn1-supl2.jar')
+    compile files('libs/asn1-base.jar')
+    compile files('libs/suplClient.jar')
+    compile files('libs/protobuf-nano.jar')
+
 }
 
 
 android {
-    compileSdkVersion 25
-    buildToolsVersion "25.0.2"
+    compileSdkVersion 29
+    buildToolsVersion "26.0.3"
     defaultConfig {
-        minSdkVersion 15
+        minSdkVersion 24
         applicationId "udel.android_sensors_driver"
-        targetSdkVersion 19
+        targetSdkVersion 29
         versionCode 1
         versionName "1.0"
+        multiDexEnabled true
     }
     sourceSets {
         main {
