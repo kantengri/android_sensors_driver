@@ -151,7 +151,7 @@ public class Config {
         if(checkbox_fluid.isChecked() != old_fluid && checkbox_fluid.isChecked()) {
             NodeConfiguration nodeConfiguration1 = NodeConfiguration.newPublic(InetAddressFactory.newNonLoopback().getHostAddress());
             nodeConfiguration1.setMasterUri(masterURI);
-            nodeConfiguration1.setNodeName("sensors_driver_pressure");
+            nodeConfiguration1.setNodeName("android_"+robot_name_text+"_sensors_driver_pressure");
             this.pub_fluid = new FluidPressurePublisher(mSensorManager, sensorDelay, robot_name_text);
             nodeMainExecutor.execute(this.pub_fluid, nodeConfiguration1);
         }
@@ -165,7 +165,7 @@ public class Config {
         if(checkbox_illuminance.isChecked() != old_illuminance && checkbox_illuminance.isChecked()) {
             NodeConfiguration nodeConfiguration2 = NodeConfiguration.newPublic(InetAddressFactory.newNonLoopback().getHostAddress());
             nodeConfiguration2.setMasterUri(masterURI);
-            nodeConfiguration2.setNodeName("sensors_driver_illuminance");
+            nodeConfiguration2.setNodeName("android_"+robot_name_text+"_sensors_driver_illuminance");
             this.pub_illuminance = new IlluminancePublisher(mSensorManager, sensorDelay, robot_name_text);
             nodeMainExecutor.execute(this.pub_illuminance, nodeConfiguration2);
         }
@@ -179,7 +179,7 @@ public class Config {
         if(checkbox_imu.isChecked() != old_imu && checkbox_imu.isChecked()) {
             NodeConfiguration nodeConfiguration3 = NodeConfiguration.newPublic(InetAddressFactory.newNonLoopback().getHostAddress());
             nodeConfiguration3.setMasterUri(masterURI);
-            nodeConfiguration3.setNodeName("sensors_driver_imu");
+            nodeConfiguration3.setNodeName("android_"+robot_name_text+"_sensors_driver_imu");
             this.pub_imu = new ImuPublisher(mSensorManager, sensorDelay, robot_name_text);
             nodeMainExecutor.execute(this.pub_imu, nodeConfiguration3);
         }
@@ -193,7 +193,7 @@ public class Config {
         if(checkbox_magnetic.isChecked() != old_magnetic && checkbox_magnetic.isChecked()) {
             NodeConfiguration nodeConfiguration4 = NodeConfiguration.newPublic(InetAddressFactory.newNonLoopback().getHostAddress());
             nodeConfiguration4.setMasterUri(masterURI);
-            nodeConfiguration4.setNodeName("driver_magnetic_field");
+            nodeConfiguration4.setNodeName("android_"+robot_name_text+"_driver_magnetic_field");
             this.pub_magnetic = new MagneticFieldPublisher(mSensorManager, sensorDelay, robot_name_text);
             nodeMainExecutor.execute(this.pub_magnetic, nodeConfiguration4);
         }
@@ -207,7 +207,7 @@ public class Config {
         if(checkbox_navsat.isChecked() != old_navsat && checkbox_navsat.isChecked()) {
             NodeConfiguration nodeConfiguration5 = NodeConfiguration.newPublic(InetAddressFactory.newNonLoopback().getHostAddress());
             nodeConfiguration5.setMasterUri(masterURI);
-            nodeConfiguration5.setNodeName("driver_navsatfix_publisher");
+            nodeConfiguration5.setNodeName("android_"+robot_name_text+"_driver_navsatfix_publisher");
             this.pub_navsat2 = new NavSatFixPublisher(mainActivity, robot_name_text);
             nodeMainExecutor.execute(this.pub_navsat2, nodeConfiguration5);
         }
@@ -221,7 +221,7 @@ public class Config {
         if(checkbox_temp.isChecked() != old_temp && checkbox_temp.isChecked()) {
             NodeConfiguration nodeConfiguration6 = NodeConfiguration.newPublic(InetAddressFactory.newNonLoopback().getHostAddress());
             nodeConfiguration6.setMasterUri(masterURI);
-            nodeConfiguration6.setNodeName("sensors_driver_temperature");
+            nodeConfiguration6.setNodeName("android_"+robot_name_text+"_sensors_driver_temperature");
             this.pub_temp = new TemperaturePublisher(mSensorManager, sensorDelay, tempSensor, robot_name_text);
             nodeMainExecutor.execute(this.pub_temp, nodeConfiguration6);
         }

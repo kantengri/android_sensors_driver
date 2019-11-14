@@ -68,7 +68,7 @@ public class IlluminancePublisher implements NodeMain {
     }
 
     public GraphName getDefaultNodeName() {
-        return GraphName.of("/android/illuminance_publisher");
+        return GraphName.of("android/illuminance_publisher");
     }
 
     public void onError(Node node, Throwable throwable) {
@@ -79,7 +79,7 @@ public class IlluminancePublisher implements NodeMain {
             List<Sensor> mfList = this.sensorManager.getSensorList(Sensor.TYPE_LIGHT);
 
             if (mfList.size() > 0) {
-                this.publisher = node.newPublisher("/android/" + robotName + "/illuminance", "sensor_msgs/Illuminance");
+                this.publisher = node.newPublisher("android/" + robotName + "/illuminance", "sensor_msgs/Illuminance");
                 this.sensorListener = new SensorListener(this.publisher);
                 this.ilThread = new IlluminanceThread(this.sensorManager, this.sensorListener);
                 this.ilThread.start();
@@ -87,7 +87,7 @@ public class IlluminancePublisher implements NodeMain {
 
         } catch (Exception e) {
             if (node != null) {
-                node.getLog().fatal(e);
+//                node.getLog().fatal(e);
             } else {
                 e.printStackTrace();
             }
@@ -160,7 +160,7 @@ public class IlluminancePublisher implements NodeMain {
                 Illuminance msg = this.publisher.newMessage();
                 long time_delta_millis = System.currentTimeMillis() - SystemClock.uptimeMillis();
                 msg.getHeader().setStamp(Time.fromMillis(time_delta_millis + event.timestamp / 1000000));
-                msg.getHeader().setFrameId("/android/illuminance"); // TODO Make parameter
+                msg.getHeader().setFrameId("android/"+robotName+"/illuminance"); // TODO Make parameter
 
                 msg.setIlluminance(event.values[0]);
                 msg.setVariance(0.0); // TODO Make parameter

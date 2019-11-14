@@ -89,7 +89,7 @@ public class TemperaturePublisher implements NodeMain {
 
         } catch (Exception e) {
             if (node != null) {
-                node.getLog().fatal(e);
+//                node.getLog().fatal(e);
             } else {
                 e.printStackTrace();
             }
@@ -162,7 +162,7 @@ public class TemperaturePublisher implements NodeMain {
                 Temperature msg = this.publisher.newMessage();
                 long time_delta_millis = System.currentTimeMillis() - SystemClock.uptimeMillis();
                 msg.getHeader().setStamp(Time.fromMillis(time_delta_millis + event.timestamp / 1000000));
-                msg.getHeader().setFrameId("/android/temperature");// TODO Make parameter
+                msg.getHeader().setFrameId("android/"+robotName+"/temperature");// TODO Make parameter
 
                 msg.setTemperature(event.values[0]);
                 msg.setVariance(0.0);

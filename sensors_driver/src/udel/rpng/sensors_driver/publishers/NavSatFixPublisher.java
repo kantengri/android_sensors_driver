@@ -123,7 +123,7 @@ public class NavSatFixPublisher implements NodeMain {
         for (Location location : locs) {
             NavSatFix fix = this.publisher.newMessage();
             fix.getHeader().setStamp(new Time(location.getTime()));
-            fix.getHeader().setFrameId("gps");
+            fix.getHeader().setFrameId("android/"+robotName+"/gps");
             fix.getStatus().setStatus(NavSatStatus.STATUS_FIX);
             fix.getStatus().setService(NavSatStatus.SERVICE_GPS);
             fix.setLatitude(mCurrentLocation.getLatitude());
@@ -156,10 +156,10 @@ public class NavSatFixPublisher implements NodeMain {
         startLocationUpdates();
         // Create our publisher
         try {
-            this.publisher = connectedNode.newPublisher("/android/" + robotName + "/fix", "sensor_msgs/NavSatFix");
+            this.publisher = connectedNode.newPublisher("android/" + robotName + "/fix", "sensor_msgs/NavSatFix");
         } catch (Exception e) {
             if (connectedNode != null) {
-                connectedNode.getLog().fatal(e);
+//                connectedNode.getLog().fatal(e);
             } else {
                 e.printStackTrace();
             }

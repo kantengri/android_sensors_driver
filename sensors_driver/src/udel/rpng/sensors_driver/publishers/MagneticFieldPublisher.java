@@ -59,9 +59,9 @@ public class MagneticFieldPublisher implements NodeMain {
     private SensorListener sensorListener;
     private SensorManager sensorManager;
     private Publisher<MagneticField> publisher;
-    private int sensorDelay;
+    private int sensorDelay;    // sampling period us
 
-    public MagneticFieldPublisher(SensorManager manager, int sensorDelay,String robotName) {
+    public MagneticFieldPublisher(SensorManager manager, int sensorDelay, String robotName) {
         this.sensorManager = manager;
         this.sensorDelay = sensorDelay;
         this.robotName = robotName;
@@ -87,7 +87,7 @@ public class MagneticFieldPublisher implements NodeMain {
 
         } catch (Exception e) {
             if (node != null) {
-                node.getLog().fatal(e);
+//                node.getLog().fatal(e);
             } else {
                 e.printStackTrace();
             }
@@ -160,7 +160,7 @@ public class MagneticFieldPublisher implements NodeMain {
                 MagneticField msg = this.publisher.newMessage();
                 long time_delta_millis = System.currentTimeMillis() - SystemClock.uptimeMillis();
                 msg.getHeader().setStamp(Time.fromMillis(time_delta_millis + event.timestamp / 1000000));
-                msg.getHeader().setFrameId("/android/magnetic_field");// TODO Make parameter
+                msg.getHeader().setFrameId("/android/"+robotName+"magnetic_field");// TODO Make parameter
 
                 msg.getMagneticField().setX(event.values[0] / 1e6);
                 msg.getMagneticField().setY(event.values[1] / 1e6);

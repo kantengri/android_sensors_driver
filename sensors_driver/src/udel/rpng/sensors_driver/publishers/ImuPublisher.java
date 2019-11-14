@@ -77,7 +77,7 @@ public class ImuPublisher implements NodeMain {
 
     public void onStart(ConnectedNode node) {
         try {
-            this.publisher = node.newPublisher("/android/" + robotName + "/imu", "sensor_msgs/Imu");
+            this.publisher = node.newPublisher("android/" + robotName + "/imu", "sensor_msgs/Imu");
             // 	Determine if we have the various needed sensors
             boolean hasAccel = false;
             boolean hasGyro = false;
@@ -94,17 +94,18 @@ public class ImuPublisher implements NodeMain {
                 hasGyro = true;
             }
 
-            List<Sensor> quatList = this.sensorManager.getSensorList(Sensor.TYPE_ROTATION_VECTOR);
+//            List<Sensor> quatList = this.sensorManager.getSensorList(Sensor.TYPE_ROTATION_VECTOR);
+            List<Sensor> quatList = this.sensorManager.getSensorList(Sensor.TYPE_GAME_ROTATION_VECTOR);
             if (quatList.size() > 0) {
                 hasQuat = true;
             }
 
             this.sensorListener = new SensorListener(publisher, hasAccel, hasGyro, hasQuat);
             this.imuThread = new ImuThread(this.sensorManager, sensorListener);
-            this.imuThread.start();
+            this.imuThread.start(); // also calling run()
         } catch (Exception e) {
             if (node != null) {
-                node.getLog().fatal(e);
+//                node.getLog().fatal(e);
             } else {
                 e.printStackTrace();
             }
@@ -229,7 +230,7 @@ public class ImuPublisher implements NodeMain {
                 // Convert event.timestamp (nanoseconds uptime) into system time, use that as the header stamp
                 long time_delta_millis = System.currentTimeMillis() - SystemClock.uptimeMillis();
                 this.imu.getHeader().setStamp(Time.fromMillis(time_delta_millis + event.timestamp / 1000000));
-                this.imu.getHeader().setFrameId("/android/imu");// TODO Make parameter
+                this.imu.getHeader().setFrameId("android/"+robotName+"/imu");// TODO Make parameter
 
                 publisher.publish(this.imu);
 

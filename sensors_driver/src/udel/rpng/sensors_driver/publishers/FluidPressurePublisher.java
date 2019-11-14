@@ -79,7 +79,7 @@ public class FluidPressurePublisher implements NodeMain {
             List<Sensor> mfList = this.sensorManager.getSensorList(Sensor.TYPE_PRESSURE);
 
             if (mfList.size() > 0) {
-                this.publisher = node.newPublisher("/android/" + robotName + "/barometric_pressure", "sensor_msgs/FluidPressure");
+                this.publisher = node.newPublisher("android/" + robotName + "/barometric_pressure", "sensor_msgs/FluidPressure");
                 this.sensorListener = new SensorListener(this.publisher);
                 this.fpThread = new FluidPressureThread(this.sensorManager, this.sensorListener);
                 this.fpThread.start();
@@ -87,7 +87,7 @@ public class FluidPressurePublisher implements NodeMain {
 
         } catch (Exception e) {
             if (node != null) {
-                node.getLog().fatal(e);
+//                node.getLog().fatal(e);
             } else {
                 e.printStackTrace();
             }
@@ -160,7 +160,7 @@ public class FluidPressurePublisher implements NodeMain {
                 FluidPressure msg = this.publisher.newMessage();
                 long time_delta_millis = System.currentTimeMillis() - SystemClock.uptimeMillis();
                 msg.getHeader().setStamp(Time.fromMillis(time_delta_millis + event.timestamp / 1000000));
-                msg.getHeader().setFrameId("/android/barometric_pressure");// TODO Make parameter
+                msg.getHeader().setFrameId("android/"+robotName+"/barometric_pressure");// TODO Make parameter
 
                 msg.setFluidPressure(100.0 * event.values[0]); // Reported in hPa, need to output in Pa
                 msg.setVariance(0.0);
