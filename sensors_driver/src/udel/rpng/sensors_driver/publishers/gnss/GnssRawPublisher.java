@@ -27,17 +27,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
 import android.graphics.Color;
 import android.location.GnssMeasurementsEvent;
 import android.location.GnssNavigationMessage;
 import android.location.GnssStatus;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.support.annotation.RequiresApi;
+import android.util.Log;
+import android.widget.TextView;
 
 import org.ros.message.Time;
 import org.ros.namespace.GraphName;
@@ -49,6 +54,10 @@ import org.ros.node.topic.Publisher;
 import sensor_msgs.NavSatFix;
 import geometry_msgs.AccelWithCovarianceStamped;
 import sensor_msgs.NavSatStatus;
+import udel.rpng.sensors_driver.MainActivity;
+import udel.rpng.sensors_driver.R;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author chadrockey@gmail.com (Chad Rockey)
@@ -56,14 +65,30 @@ import sensor_msgs.NavSatStatus;
  */
 public class GnssRawPublisher implements NodeMain {
 
+    private MainActivity mainAct;
     private String robotName;
+    private String TAG = "GnssRawPublisher";
+
     private GnssRawThread grThread;
     private Publisher<NavSatFix> pub_fix;
     private Publisher<AccelWithCovarianceStamped> pub_accel;
 
+    LocationManager mLocationManager;
+    GnssMeasurementsEvent.Callback mGnssMeasurementsEventCallback;
+    LocationListener mLocationListener;
 
-    public GnssRawPublisher(String robotName){
+    private static final long LOCATION_RATE_GPS_MS = TimeUnit.SECONDS.toMillis(1L);
+    private static final long LOCATION_RATE_NETWORK_MS = TimeUnit.SECONDS.toMillis(60L);
+
+    //    public GnssRawPublisher(String robotName){
+    public GnssRawPublisher(MainActivity mainAct, String robotName){
+        this.mainAct=mainAct;
         this.robotName=robotName;
+
+        mLocationManager = (LocationManager) mainAct.getApplicationContext().getSystemService(mainAct.getApplicationContext().LOCATION_SERVICE);
+
+        Log.i(TAG, "hoge");
+
     }
 
 
@@ -80,6 +105,7 @@ public class GnssRawPublisher implements NodeMain {
     public void onError(Node node, Throwable throwable) {
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.N)
     public void onStart(ConnectedNode node) {
         try {
 //            List<Sensor> mfList = this.sensorManager.getSensorList(Sensor.TYPE_MAGNETIC_FIELD);
@@ -87,7 +113,66 @@ public class GnssRawPublisher implements NodeMain {
             this.pub_fix = node.newPublisher("android/" + robotName + "/gnss_raw/fixENU", "sensor_msgs/NavSatFix");
             this.pub_accel= node.newPublisher("android/" + robotName + "/gnss_raw/accelENU", "geometry_msgs/AccelWithCovarianceStamped");
 
+            Log.i(TAG, "thread");
 
+            this.grThread=new GnssRawThread(mainAct,pub_fix,pub_accel);
+
+            mLocationListener = new LocationListener() {
+                @Override
+                public void onLocationChanged(Location location) {
+                    Log.i("hoge","hoge2");
+                    grThread.onLocationChanged(location);
+                }
+
+                @Override
+                public void onStatusChanged(String s, int i, Bundle bundle) {
+
+                }
+
+                @Override
+                public void onProviderEnabled(String s) {
+                    Log.i(TAG, "Enabled by "+s);
+                    grThread.onProviderEnabled(s);
+                }
+
+                @Override
+                public void onProviderDisabled(String s) {
+                    Log.i(TAG, "Disabled by "+s);
+                    grThread.onProviderDisabled(s);
+                }
+            };
+
+            mGnssMeasurementsEventCallback = new GnssMeasurementsEvent.Callback() {
+                @Override
+                public void onGnssMeasurementsReceived(GnssMeasurementsEvent eventArgs) {
+                    Log.i("hoge33","hoge5");
+                    grThread.onGnssMeasurementsReceived(eventArgs);
+                }
+            };
+
+//            mLocationManager.requestLocationUpdates(
+//                    LocationManager.NETWORK_PROVIDER,
+//                    300,
+//                    1 /* minDistance */,
+//                    mLocationListener);
+//            mLocationManager.requestLocationUpdates(
+//                    LocationManager.GPS_PROVIDER,
+//                    300,
+//                    1 /* minDistance */,
+//                    mLocationListener);
+
+//            mLocationManager.requestLocationUpdates(
+//                    LocationManager.NETWORK_PROVIDER,
+//                    LOCATION_RATE_NETWORK_MS,
+//                    0.0f /* minDistance */,
+//                    mLocationListener);
+//            mLocationManager.requestLocationUpdates(
+//                    LocationManager.GPS_PROVIDER,
+//                    LOCATION_RATE_GPS_MS,
+//                    0.0f /* minDistance */,
+//                    mLocationListener);
+
+            mLocationManager.registerGnssMeasurementsCallback(mGnssMeasurementsEventCallback);
 
 //            if (mfList.size() > 0) {
 //                this.publisher = node.newPublisher("android/" + robotName + "/gnss_raw/", "sensor_msgs/MagneticField");
@@ -107,6 +192,11 @@ public class GnssRawPublisher implements NodeMain {
 
     //@Override
     public void onShutdown(Node arg0) {
+
+        Log.i("shutdown","hog3");
+        mLocationManager.removeUpdates(mLocationListener);
+        mLocationManager.unregisterGnssMeasurementsCallback(mGnssMeasurementsEventCallback);
+
 //        if (this.mfThread == null) {
 //            return;
 //        }
@@ -126,6 +216,10 @@ public class GnssRawPublisher implements NodeMain {
 
 
     private class GnssRawThread implements GnssListener{
+
+        private MainActivity mainAct;
+        private TextView tvLocation;
+        private String TAG = "GnssRawPublisher";
 
         private Publisher<NavSatFix> pub_fix;
         private Publisher<AccelWithCovarianceStamped> pub_accel;
@@ -152,7 +246,15 @@ public class GnssRawPublisher implements NodeMain {
         private double[] mGroundTruth = null;
         private int mPositionSolutionCount = 0;
 
-        public GnssRawThread(Publisher<NavSatFix> pub_fix, Publisher<AccelWithCovarianceStamped> pub_accel){
+//        public GnssRawThread(Publisher<NavSatFix> pub_fix, Publisher<AccelWithCovarianceStamped> pub_accel){
+
+        public GnssRawThread(MainActivity mainAct, Publisher<NavSatFix> pub_fix, Publisher<AccelWithCovarianceStamped> pub_accel){
+
+            this.mainAct=mainAct;
+            this.tvLocation = (TextView) mainAct.findViewById(R.id.titleTextGPS);
+
+//            tvLocation.setText("Start GnssRawPublisher!");
+            Log.i(TAG, "thread start");
 
             this.pub_fix =pub_fix;
             this.pub_accel=pub_accel;
@@ -171,16 +273,15 @@ public class GnssRawPublisher implements NodeMain {
                                 mPseudorangePositionVelocityFromRealTimeEvents =
                                         new PseudorangePositionVelocityFromRealTimeEvents();
                             } catch (Exception e) {
-//                            Log.e(
-//                                    GnssContainer.TAG,
-//                                    " Exception in constructing PseudorangePositionFromRealTimeEvents : ",
-//                                    e);
+                                Log.e(
+                                        TAG,
+                                        " Exception in constructing PseudorangePositionFromRealTimeEvents : ",
+                                        e);
                             }
                         }
                     };
 
             mMyPositionVelocityCalculationHandler.post(r);
-
 
         }
 
@@ -195,10 +296,14 @@ public class GnssRawPublisher implements NodeMain {
 //    }
 
         @Override
-        public void onProviderEnabled(String provider) {}
+        public void onProviderEnabled(String provider) {
+            Log.i(TAG, "Enabled by "+provider);
+        }
 
         @Override
-        public void onProviderDisabled(String provider) {}
+        public void onProviderDisabled(String provider) {
+            Log.i(TAG, "Disabled by "+provider);
+        }
 
         @Override
         public void onGnssStatusChanged(GnssStatus gnssStatus) {}
@@ -210,6 +315,7 @@ public class GnssRawPublisher implements NodeMain {
         // call when location information changed
         @Override
         public void onLocationChanged(final Location location) {
+            Log.i(TAG, "onLocationChanged");
             if (location.getProvider().equals(LocationManager.NETWORK_PROVIDER)) {  // cell tower and wifi based, rapid but low accuracy
                 final Runnable r =
                         new Runnable() {
@@ -381,6 +487,7 @@ public class GnssRawPublisher implements NodeMain {
 
         @Override
         public void onGnssMeasurementsReceived(final GnssMeasurementsEvent event) {
+            Log.i(TAG, "onGnssMeasurementsReceived");
             mAllowShowingRawResults = true;
             final Runnable r =
                     new Runnable() {

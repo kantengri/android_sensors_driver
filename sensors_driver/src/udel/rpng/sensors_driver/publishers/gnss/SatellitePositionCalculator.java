@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
-import udel.rpng.sensors_driver.publishers.gnss_raw.SatelliteClockCorrectionCalculator.SatClockCorrection;
 import android.location.cts.nano.Ephemeris.GpsEphemerisProto;
+
+import udel.rpng.sensors_driver.publishers.gnss.SatelliteClockCorrectionCalculator.SatClockCorrection;
 
 /**
  * Class to calculate GPS satellite positions from the ephemeris data

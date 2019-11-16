@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
 import android.util.Pair;
+
 import com.google.common.base.Preconditions;
 import com.google.common.primitives.Longs;
-import java.util.Calendar;
-import java.util.concurrent.TimeUnit;
+
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
+
+import java.util.Calendar;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A simple class to represent time unit used by GPS.

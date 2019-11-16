@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
-import udel.rpng.sensors_driver.publishers.gnss_raw.Ecef2LlaConverter.GeodeticLlaValues;
 import org.apache.commons.math3.linear.RealMatrix;
+
+import udel.rpng.sensors_driver.publishers.gnss.Ecef2LlaConverter.GeodeticLlaValues;
 
 /**
  * Transformations from ECEF coordinates to Topocentric coordinates

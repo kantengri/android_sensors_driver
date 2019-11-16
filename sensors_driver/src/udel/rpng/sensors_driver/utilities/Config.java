@@ -22,7 +22,7 @@ import udel.rpng.sensors_driver.publishers.ImuPublisher;
 import udel.rpng.sensors_driver.publishers.MagneticFieldPublisher;
 import udel.rpng.sensors_driver.publishers.NavSatFixPublisher;
 import udel.rpng.sensors_driver.publishers.TemperaturePublisher;
-import udel.rpng.sensors_driver.publishers.gnss_raw.GnssRawPublisher;
+import udel.rpng.sensors_driver.publishers.gnss.GnssPublisher;
 import udel.rpng.sensors_driver.publishers.images3.ImageParams;
 import udel.rpng.sensors_driver.publishers.images3.CameraManager;
 import org.ros.node.NodeConfiguration;
@@ -46,7 +46,7 @@ public class Config {
     protected CheckBox checkbox_magnetic;
     protected CheckBox checkbox_navsat;
     protected CheckBox checkbox_temp;
-    protected CheckBox checkbox_gnssraw;
+    protected CheckBox checkbox_gnss;
     protected Button button_config;
     protected LinearLayout camera_list;
 
@@ -57,7 +57,7 @@ public class Config {
     protected boolean old_magnetic;
     protected boolean old_navsat;
     protected boolean old_temp;
-    protected boolean old_gnssraw;
+    protected boolean old_gnss;
     protected ArrayList<Boolean> old_camera_list;
     protected ArrayList<ImageParams.ViewMode> old_camera_viewmode;
     protected ArrayList<ImageParams.CompressionLevel> old_camera_compression;
@@ -69,7 +69,7 @@ public class Config {
     protected MagneticFieldPublisher pub_magnetic;
     protected NavSatFixPublisher pub_navsat2;
     protected TemperaturePublisher pub_temp;
-    protected GnssRawPublisher pub_gnssraw;
+    protected GnssPublisher pub_gnss;
     protected CameraManager pub_cameras;
 
     //protected LocationManager mLocationManager;
@@ -89,7 +89,7 @@ public class Config {
         checkbox_magnetic = (CheckBox) mainActivity.findViewById(R.id.checkbox_magnetic);
         checkbox_navsat = (CheckBox) mainActivity.findViewById(R.id.checkbox_navsat);
         checkbox_temp = (CheckBox) mainActivity.findViewById(R.id.checkbox_temp);
-        checkbox_gnssraw = (CheckBox) mainActivity.findViewById(R.id.checkbox_gnssraw);
+        checkbox_gnss = (CheckBox) mainActivity.findViewById(R.id.checkbox_gnss);
         button_config = (Button) mainActivity.findViewById(R.id.config_submit);
 
         // Load old variables, booleans default to false
@@ -142,7 +142,7 @@ public class Config {
             nodeMainExecutor.shutdownNodeMain(pub_magnetic);
             nodeMainExecutor.shutdownNodeMain(pub_navsat2);
             nodeMainExecutor.shutdownNodeMain(pub_temp);
-            nodeMainExecutor.shutdownNodeMain(pub_gnssraw);
+            nodeMainExecutor.shutdownNodeMain(pub_gnss);
             nodeMainExecutor.shutdownNodeMain(pub_cameras);
             old_fluid = false;
             old_illuminance = false;
@@ -150,7 +150,7 @@ public class Config {
             old_magnetic = false;
             old_navsat = false;
             old_temp = false;
-            old_gnssraw= false;
+            old_gnss= false;
             old_camera_list = new ArrayList<Boolean>();
         }
 
@@ -238,18 +238,18 @@ public class Config {
             pub_temp = null;
         }
 
-        // GNSS raw message node startup
-        if(checkbox_gnssraw.isChecked() != old_gnssraw && checkbox_gnssraw.isChecked()) {
+        // GNSS  message node startup
+        if(checkbox_gnss.isChecked() != old_gnss && checkbox_gnss.isChecked()) {
             NodeConfiguration nodeConfiguration7 = NodeConfiguration.newPublic(InetAddressFactory.newNonLoopback().getHostAddress());
             nodeConfiguration7.setMasterUri(masterURI);
-            nodeConfiguration7.setNodeName("android_"+robot_name_text+"_driver_gnssraw_publisher");
-            this.pub_gnssraw = new GnssRawPublisher(robot_name_text);
-            nodeMainExecutor.execute(this.pub_gnssraw, nodeConfiguration7);
+            nodeConfiguration7.setNodeName("android_"+robot_name_text+"_driver_gnss_publisher");
+            this.pub_gnss = new GnssPublisher(mainActivity,robot_name_text);
+            nodeMainExecutor.execute(this.pub_gnss, nodeConfiguration7);
         }
         // Navigation satellite node shutdown
-        else if(checkbox_gnssraw.isChecked() != old_gnssraw) {
-            nodeMainExecutor.shutdownNodeMain(pub_gnssraw);
-            pub_gnssraw = null;
+        else if(checkbox_gnss.isChecked() != old_gnss) {
+            nodeMainExecutor.shutdownNodeMain(pub_gnss);
+            pub_gnss = null;
         }
 
 
@@ -290,7 +290,7 @@ public class Config {
         old_magnetic = checkbox_magnetic.isChecked();
         old_navsat = checkbox_navsat.isChecked();
         old_temp = checkbox_temp.isChecked();
-        old_gnssraw = checkbox_gnssraw.isChecked();
+        old_gnss = checkbox_gnss.isChecked();
 
         // Update camera params
         for(int i=0; i<camera_list.getChildCount(); i++) {

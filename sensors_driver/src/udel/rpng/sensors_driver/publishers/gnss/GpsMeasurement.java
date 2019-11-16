@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
 /**
  * A container for the received GPS measurements for a single satellite.

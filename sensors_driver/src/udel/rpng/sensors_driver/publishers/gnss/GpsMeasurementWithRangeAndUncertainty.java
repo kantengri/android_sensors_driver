@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
 /**
  * A container for the received GPS measurements for a single satellite.
@@ -29,9 +29,9 @@ class GpsMeasurementWithRangeAndUncertainty extends GpsMeasurement {
 
   /** Pseudorange uncertainty (meters) */
   public final double pseudorangeUncertaintyMeters;
-  
+
   public GpsMeasurementWithRangeAndUncertainty(GpsMeasurement another, double pseudorangeMeters,
-      double pseudorangeUncertaintyMeters) {
+                                               double pseudorangeUncertaintyMeters) {
     super(another);
     this.pseudorangeMeters = pseudorangeMeters;
     this.pseudorangeUncertaintyMeters = pseudorangeUncertaintyMeters;

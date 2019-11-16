@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
 import android.location.GnssClock;
 import android.location.GnssMeasurement;
 import android.location.GnssMeasurementsEvent;
 import android.location.GnssNavigationMessage;
 import android.location.GnssStatus;
-import android.util.Log;
-import udel.rpng.sensors_driver.publishers.gnss_raw.Ecef2EnuConverter.EnuValues;
-import udel.rpng.sensors_driver.publishers.gnss_raw.Ecef2LlaConverter.GeodeticLlaValues;
 import android.location.cts.nano.Ephemeris.GpsEphemerisProto;
 import android.location.cts.nano.Ephemeris.GpsNavMessageProto;
 import android.location.cts.suplClient.SuplRrlpController;
+import android.util.Log;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.UnknownHostException;
@@ -35,6 +34,9 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
+import udel.rpng.sensors_driver.publishers.gnss.Ecef2EnuConverter.EnuValues;
+import udel.rpng.sensors_driver.publishers.gnss.Ecef2LlaConverter.GeodeticLlaValues;
 
 /**
  * Helper class for calculating Gps position and velocity solution using weighted least squares
@@ -155,6 +157,7 @@ public class PseudorangePositionVelocityFromRealTimeEvents {
             mUsefulSatellitesToReceiverMeasurements, mHardwareGpsNavMessageProto);
     if (useNavMessageFromSupl) {
       Log.d(TAG, "Using navigation message from SUPL server");
+//      return;
 
       if (mFirstSuplRequestNeeded
           || (System.currentTimeMillis() - mLastReceivedSuplMessageTimeMillis)
@@ -414,6 +417,7 @@ public class PseudorangePositionVelocityFromRealTimeEvents {
         }
       }
     }
+//    return false;
     return useNavMessageFromSupl;
   }
 

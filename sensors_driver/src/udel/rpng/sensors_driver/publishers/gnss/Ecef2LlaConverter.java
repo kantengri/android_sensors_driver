@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
 /**
  * Converts ECEF (Earth Centered Earth Fixed) Cartesian coordinates to LLA (latitude, longitude,

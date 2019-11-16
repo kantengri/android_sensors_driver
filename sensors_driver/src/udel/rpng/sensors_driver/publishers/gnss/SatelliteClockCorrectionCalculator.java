@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
 import android.location.cts.nano.Ephemeris.GpsEphemerisProto;
+
 /**
  * Calculates the GPS satellite clock correction based on parameters observed from the navigation
  * message

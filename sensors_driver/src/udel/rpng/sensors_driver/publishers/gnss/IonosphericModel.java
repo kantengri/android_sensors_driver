@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
-import udel.rpng.sensors_driver.publishers.gnss_raw.Ecef2LlaConverter.GeodeticLlaValues;
-import udel.rpng.sensors_driver.publishers.gnss_raw.EcefToTopocentricConverter.TopocentricAEDValues;
+import udel.rpng.sensors_driver.publishers.gnss.Ecef2LlaConverter.GeodeticLlaValues;
+import udel.rpng.sensors_driver.publishers.gnss.EcefToTopocentricConverter.TopocentricAEDValues;
 
 /**
  * Calculates the Ionospheric correction of the pseudorange given the {@code userPosition},

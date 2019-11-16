@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
 import com.google.common.base.Preconditions;
-import udel.rpng.sensors_driver.publishers.gnss_raw.EcefToTopocentricConverter.TopocentricAEDValues;
-import udel.rpng.sensors_driver.publishers.gnss_raw.UserPositionVelocityWeightedLeastSquare.
-    SatellitesPositionPseudorangesResidualAndCovarianceMatrix;
+
 import java.util.Arrays;
 import java.util.Comparator;
+
+import udel.rpng.sensors_driver.publishers.gnss.EcefToTopocentricConverter.TopocentricAEDValues;
+import udel.rpng.sensors_driver.publishers.gnss.UserPositionVelocityWeightedLeastSquare.SatellitesPositionPseudorangesResidualAndCovarianceMatrix;
 
 /**
  * A tool with the methods to perform the pseudorange residual analysis.

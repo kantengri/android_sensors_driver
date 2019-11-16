@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package udel.rpng.sensors_driver.publishers.gnss_raw;
+package udel.rpng.sensors_driver.publishers.gnss;
 
-import udel.rpng.sensors_driver.publishers.gnss_raw.Ecef2LlaConverter.GeodeticLlaValues;
+import udel.rpng.sensors_driver.publishers.gnss.Ecef2LlaConverter.GeodeticLlaValues;
 
 /**
  * A tool to convert geodetic latitude, longitude and altitude above planetary ellipsoid to

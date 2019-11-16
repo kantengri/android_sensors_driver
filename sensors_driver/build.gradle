@@ -49,12 +49,12 @@ dependencies {
 
 
 android {
-    compileSdkVersion 29
-    buildToolsVersion "26.0.3"
+    compileSdkVersion 25
+    buildToolsVersion "25.0.2"
     defaultConfig {
-        minSdkVersion 24
+        minSdkVersion 15
         applicationId "udel.android_sensors_driver"
-        targetSdkVersion 29
+        targetSdkVersion 19
         versionCode 1
         versionName "1.0"
         multiDexEnabled true
