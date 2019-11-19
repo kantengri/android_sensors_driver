@@ -1,0 +1,192 @@
+package udel.rpng.sensors_driver.publishers.gnss;
+
+import android.content.Context;
+import android.os.SystemClock;
+import android.widget.TextView;
+
+import org.ros.message.Time;
+import org.ros.namespace.GraphName;
+import org.ros.node.ConnectedNode;
+import org.ros.node.Node;
+import org.ros.node.NodeMain;
+import org.ros.node.topic.Publisher;
+import android.util.Log;
+
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+
+import sensor_msgs.NavSatFix;
+import sensor_msgs.NavSatStatus;
+import geometry_msgs.AccelWithCovarianceStamped;
+import udel.rpng.sensors_driver.MainActivity;
+import udel.rpng.sensors_driver.R;
+
+public class GnssPublisher implements NodeMain {
+
+    // View objects and the main activity
+    private String robotName;
+    private String TAG = "GnssPublisher";
+    private MainActivity mainAct;
+    private TextView tvLocation;
+    private Context mContext;
+
+    SharedPreferences mGnssLogger;
+    SharedPreferences.OnSharedPreferenceChangeListener mGnssLoggerListener;
+
+
+    Time time=Time.fromMillis(System.currentTimeMillis());
+    double[] posSolution=new double[3];
+    double[] velSolution=new double[3];
+    double[] posUncertainty=new double[3];
+    double[] velUncertainty=new double[3];
+
+    // Our ROS publish node
+    private Publisher<NavSatFix> pub_fix;
+    private Publisher<AccelWithCovarianceStamped> pub_accel;
+
+    public GnssPublisher(MainActivity mainAct, String robotName) {
+        // Get our textzone
+        this.mainAct = mainAct;
+        this.robotName = robotName;
+        tvLocation = (TextView) mainAct.findViewById(R.id.titleTextGnss);
+
+        try{
+            mContext=mainAct.createPackageContext("com.google.android.apps.location.gps.gnsslogger",Context.CONTEXT_RESTRICTED);
+            mGnssLogger=mContext.getSharedPreferences("GnssLog",Context.MODE_PRIVATE);
+
+        }
+        catch (NameNotFoundException e) {
+            Log.e("SharedPref", e.getLocalizedMessage());
+        }
+
+    }
+
+    @Override
+    public GraphName getDefaultNodeName() {
+        return GraphName.of("sensors_driver/gnss_publisher");
+    }
+
+    @Override
+    public void onStart(ConnectedNode connectedNode) {
+        try {
+            this.pub_fix = connectedNode.newPublisher("android/" + robotName + "/gnss/fix", "sensor_msgs/NavSatFix");
+            this.pub_accel= connectedNode.newPublisher("android/" + robotName + "/gnss/accelENU", "geometry_msgs/AccelWithCovarianceStamped");
+
+
+            mGnssLoggerListener=new OnSharedPreferenceChangeListener() {
+                @Override
+                public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
+                    tvLocation.setText("dfeaedfaeo");
+                    onGnssLoggerChanged(sharedPreferences, s);
+                }
+            };
+            mGnssLogger.registerOnSharedPreferenceChangeListener(mGnssLoggerListener);
+
+            tvLocation.setText("Not launched GnssLogger App");
+
+            int tmp=mGnssLogger.getInt("ddda",99999);
+            tvLocation.setText(Integer.toString(tmp));
+
+        }
+        catch (Exception e) {
+            if (connectedNode != null) {
+//                connectedNode.getLog().fatal(e);
+            } else {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public void onShutdown(Node node) {}
+
+    @Override
+    public void onShutdownComplete(Node node) {}
+
+    @Override
+    public void onError(Node node, Throwable throwable) {}
+
+
+    /**
+     *
+     * @param gnssLogger
+     * @param s
+     */
+    private void onGnssLoggerChanged(SharedPreferences gnssLogger, String s){
+
+        tvLocation.setText("ghaa");
+
+        time=Time.fromMillis(System.currentTimeMillis());
+
+        if(s=="pos_vel"){
+
+            String log=gnssLogger.getString(s,"");
+
+            String[] values=log.split(" ");
+            posSolution[0]=Double.valueOf(values[0]);
+            posSolution[1]=Double.valueOf(values[1]);
+            posSolution[2]=Double.valueOf(values[2]);
+            velSolution[0]=Double.valueOf(values[3]);
+            velSolution[1]=Double.valueOf(values[4]);
+            velSolution[2]=Double.valueOf(values[5]);
+            posUncertainty[0]=Double.valueOf(values[6]);
+            posUncertainty[1]=Double.valueOf(values[7]);
+            posUncertainty[2]=Double.valueOf(values[8]);
+            velUncertainty[0]=Double.valueOf(values[9]);
+            velUncertainty[1]=Double.valueOf(values[10]);
+            velUncertainty[2]=Double.valueOf(values[11]);
+
+            if(Double.isNaN(posSolution[0]) || Double.isNaN(posSolution[1]) || Double.isNaN(posSolution[2]) ||
+                    Double.isNaN(velSolution[0]) || Double.isNaN(velSolution[1]) || Double.isNaN(velSolution[2]) ||
+                    Double.isNaN(posUncertainty[0]) || Double.isNaN(posUncertainty[1]) || Double.isNaN(posUncertainty[2]) ||
+                    Double.isNaN(velUncertainty[0]) || Double.isNaN(velUncertainty[1]) || Double.isNaN(velUncertainty[2])){
+                tvLocation.setText("GnssLogger not calculating position and velocity");
+            }
+
+            publish();
+            tvLocation.setText("");
+        }
+
+    }
+
+    /**
+     *
+     */
+    private void publish() {
+
+        NavSatFix fix = pub_fix.newMessage();
+        fix.getHeader().setStamp(time);
+        fix.getHeader().setStamp(time);
+        fix.getHeader().setFrameId("android/"+robotName+"/gnss/fixENU");
+        fix.getStatus().setStatus(NavSatStatus.STATUS_FIX);
+        fix.getStatus().setService(NavSatStatus.SERVICE_GPS);
+        fix.setLatitude(posSolution[0]);
+        fix.setLongitude(posSolution[1]);
+        fix.setAltitude(posSolution[2]);
+        double[] pos_cov={posUncertainty[0],0.0,0.0,0.0,posUncertainty[1],0.0,0.0,0.0,posUncertainty[2]};
+        fix.setPositionCovariance(pos_cov);
+        fix.setPositionCovarianceType(NavSatFix.COVARIANCE_TYPE_APPROXIMATED);
+        pub_fix.publish(fix);
+
+        AccelWithCovarianceStamped accel=pub_accel.newMessage();
+        long time_delta_millis = System.currentTimeMillis() - SystemClock.uptimeMillis();
+        accel.getHeader().setStamp(time);
+        accel.getHeader().setFrameId("android/"+robotName+"/gnss/accelENU");
+        accel.getAccel().getAccel().getLinear().setX(velSolution[0]);
+        accel.getAccel().getAccel().getLinear().setY(velSolution[1]);
+        accel.getAccel().getAccel().getLinear().setZ(velSolution[2]);
+        double[] accel_cov={
+                velUncertainty[0],   0.0,                0.0,                0.0,    0.0,    0.0,
+                0.0,                velUncertainty[1],   0.0,                0.0,    0.0,    0.0,
+                0.0,                0.0,                velUncertainty[2],   0.0,    0.0,    0.0,
+                0.0,                0.0,                0.0,                0.0,    0.0,    0.0,
+                0.0,                0.0,                0.0,                0.0,    0.0,    0.0,
+                0.0,                0.0,                0.0,                0.0,    0.0,    0.0};
+        accel.getAccel().setCovariance(accel_cov);
+        pub_accel.publish(accel);
+    }
+
+
+
+}

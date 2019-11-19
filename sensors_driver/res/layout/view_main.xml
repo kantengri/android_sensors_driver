@@ -28,4 +28,13 @@
         android:textSize="20sp" />
 
 
+    <TextView
+        android:id="@+id/titleTextGnss"
+        android:layout_width = "fill_parent"
+        android:layout_height = "fill_parent"
+        android:gravity="right|center"
+        android:textColor="#FFF"
+        android:textSize="20sp" />
+
+
 </FrameLayout>

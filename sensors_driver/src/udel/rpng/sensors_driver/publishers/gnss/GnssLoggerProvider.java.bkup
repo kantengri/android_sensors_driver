@@ -1,0 +1,91 @@
+package udel.rpng.sensors_driver.publishers.gnss;
+
+import android.content.ContentProvider;
+import android.content.ContentValues;
+import android.content.SharedPreferences;
+//import android.content
+import android.preference.PreferenceManager;
+import android.os.IBinder;
+import android.database.Cursor;
+import android.net.Uri;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+
+public class GnssLoggerProvider extends ContentProvider {
+
+    // Authority
+    public static final String AUTHORITY = "com.example";
+
+    // USERS テーブル URI ID
+    private static final int USERS = 1;
+    // USERS テーブル 個別 URI ID
+    private static final int USER_ID = 2;
+
+
+    private SharedPreferences mPrefs;
+
+    @Override
+    public boolean onCreate() {
+//        LogUtil.d(TAG, "onCreate " + Binder.getCallingPid() + ", "
+//                + Thread.currentThread().getName());
+        mPrefs = PreferenceManager.getDefaultSharedPreferences(getContext());
+        return true;
+
+    }
+
+    @Nullable
+    @Override
+    public Cursor query(@NonNull Uri uri, @Nullable String[] strings, @Nullable String s, @Nullable String[] strings1, @Nullable String s1) {
+        // URIの整合性を確認
+        checkUri(uri);
+
+        if (uri == null || uri.getPathSegments() == null) {
+        } else if (TABLE.equals(uri.getPathSegments().get(0))) {
+            // すごく例えが悪いですが、
+            // 例えばSharedPreferencesの中身をそのままkey,valueでいれてしまう。
+            MatrixCursor cursor = new MatrixCursor(new String[] {
+                    "key", "value"
+            });
+            Map all = mPrefs.getAll();
+            Object value;
+            for (String key : selectionArgs) {
+                if (all.containsKey(key)) {
+                    value = all.get(key);
+                    cursor.addRow(new Object[] {
+                            key, value
+                    });
+                }
+            }
+            return cursor;
+        } else {
+            //テーブルによって出し分けるなど。
+        }
+
+        throw new UnsupportedOperationException("");
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public String getType(@NonNull Uri uri) {
+        return null;
+    }
+
+    @Nullable
+    @Override
+    public Uri insert(@NonNull Uri uri, @Nullable ContentValues contentValues) {
+        return null;
+    }
+
+    @Override
+    public int delete(@NonNull Uri uri, @Nullable String s, @Nullable String[] strings) {
+        return 0;
+    }
+
+    @Override
+    public int update(@NonNull Uri uri, @Nullable ContentValues contentValues, @Nullable String s, @Nullable String[] strings) {
+        return 0;
+    }
+
+
+}

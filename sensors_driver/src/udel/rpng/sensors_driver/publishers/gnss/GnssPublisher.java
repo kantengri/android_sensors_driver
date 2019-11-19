@@ -1,35 +1,12 @@
 package udel.rpng.sensors_driver.publishers.gnss;
 
-import android.content.IntentSender;
-import android.graphics.Color;
-import android.location.Location;
-import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Looper;
-import android.support.annotation.NonNull;
-import android.util.Log;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Bundle;
+import android.os.SystemClock;
 import android.widget.TextView;
-import android.widget.Toast;
-
-import com.google.android.gms.common.api.ApiException;
-import com.google.android.gms.common.api.ResolvableApiException;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationResult;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.location.LocationSettingsRequest;
-import com.google.android.gms.location.LocationSettingsResponse;
-import com.google.android.gms.location.LocationSettingsStatusCodes;
-import com.google.android.gms.location.SettingsClient;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
-
-import android.location.LocationManager;
-import android.location.GnssMeasurementsEvent;
-import android.location.GnssNavigationMessage;
-import android.support.annotation.RequiresApi;
-import android.os.Build;
 
 import org.ros.message.Time;
 import org.ros.namespace.GraphName;
@@ -37,11 +14,13 @@ import org.ros.node.ConnectedNode;
 import org.ros.node.Node;
 import org.ros.node.NodeMain;
 import org.ros.node.topic.Publisher;
+import android.util.Log;
 
-import java.text.DateFormat;
-import java.text.DecimalFormat;
-import java.util.Date;
-import java.util.List;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+
+import java.util.Map;
 
 import sensor_msgs.NavSatFix;
 import sensor_msgs.NavSatStatus;
@@ -49,482 +28,169 @@ import geometry_msgs.AccelWithCovarianceStamped;
 import udel.rpng.sensors_driver.MainActivity;
 import udel.rpng.sensors_driver.R;
 
-public class GnssPublisher implements NodeMain {
+import static java.lang.Double.NaN;
 
-    boolean init=true;
+public class GnssPublisher implements NodeMain{
 
-    // "Constant used in the location settings dialog."
-    // Not sure why this is needed... -pgeneva
-    private static final int REQUEST_CHECK_SETTINGS = 0x1;
-
-    // The desired interval for location updates. Inexact. Updates may be more or less frequent.
-    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 1000;
-    // The fastest rate for active location updates. Exact. Updates will never be more frequent than this value.
-    private static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = UPDATE_INTERVAL_IN_MILLISECONDS / 2;
-
-    // Fused location provider
-    private FusedLocationProviderClient mFusedLocationClient;
-    private SettingsClient mSettingsClient;
-    private LocationRequest mLocationRequest;
-    private LocationSettingsRequest mLocationSettingsRequest;
-    private LocationCallback mLocationCallback;
-
-    LocationManager mLocationManager;
-    GnssMeasurementsEvent.Callback mGnssMeasurementsEventCallback;
-    GnssNavigationMessage.Callback mGnssNavigationMessageCallback;
-    private PseudorangePositionVelocityFromRealTimeEvents
-            mPseudorangePositionVelocityFromRealTimeEvents;
-    private HandlerThread mPositionVelocityCalculationHandlerThread;  // ThreadのLooper持ち
-    private Handler mMyPositionVelocityCalculationHandler;
-    double[] posSolution;
-    double[] velSolution;
-    double[] pvUncertainty;
-
-    double[] mGroundTruth;
-
-    private static final long EARTH_RADIUS_METERS = 6371000;
-    private int mCurrentColor = Color.rgb(0x4a, 0x5f, 0x70);
-
-
-    // My current location
-    private Location mCurrentLocation;
-
-    // View objects and the main activity
-    private TextView tvLocation;
-    private String mLastUpdateTime;
+        // View objects and the main activity
     private String robotName;
     private String TAG = "GnssPublisher";
     private MainActivity mainAct;
+    private TextView tvLocation;
+    private Context mContext;
+    private IntentFilter mIntentFilter;
+    private GnssLoggerReceiver mGnssLoggerReceiver;
 
+    boolean mIsShutdown=false;
+
+    SharedPreferences mGnssLogger;
+//    SharedPreferences.OnSharedPreferenceChangeListener mGnssLoggerListener;
+//    SharedPreferences.Editor mGnssLoggerEditor;
+
+    String value_pre="";
+
+    Time time=Time.fromMillis(System.currentTimeMillis());
+    double[] posSolution=new double[3];
+    double[] velSolution=new double[3];
+    double[] posUncertainty=new double[3];
+    double[] velUncertainty=new double[3];
 
     // Our ROS publish node
     private Publisher<NavSatFix> pub_fix;
     private Publisher<AccelWithCovarianceStamped> pub_accel;
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
     public GnssPublisher(MainActivity mainAct, String robotName) {
         // Get our textzone
         this.mainAct = mainAct;
         this.robotName = robotName;
-        tvLocation = (TextView) mainAct.findViewById(R.id.titleTextGPS);
-        // Set our clients
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(mainAct);
-        mSettingsClient = LocationServices.getSettingsClient(mainAct);
+        tvLocation = (TextView) mainAct.findViewById(R.id.titleTextGnss);
 
+        try {
+            mContext = mainAct.createPackageContext("com.google.android.apps.location.gps.gnsslogger", Context.CONTEXT_RESTRICTED);
+            mGnssLogger = mContext.getSharedPreferences("GnssLog", Context.MODE_PRIVATE);
+//            mGnssLoggerEditor = mGnssLogger.edit();
 
-        /* Velocity */
-        mLocationManager = (LocationManager) mainAct.getApplicationContext().getSystemService(mainAct.getApplicationContext().LOCATION_SERVICE);
-        mPositionVelocityCalculationHandlerThread =
-                new HandlerThread("Position From Realtime Pseudoranges");
-        mPositionVelocityCalculationHandlerThread.start();
-        mMyPositionVelocityCalculationHandler =
-                new Handler(mPositionVelocityCalculationHandlerThread.getLooper());
-        final Runnable r = new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    mPseudorangePositionVelocityFromRealTimeEvents = new PseudorangePositionVelocityFromRealTimeEvents();
-                }
-                catch (Exception e) {
-                    Log.e(TAG, " Exception in constructing PseudorangePositionFromRealTimeEvents : ", e);
-                }
-            }
-        };
-        mMyPositionVelocityCalculationHandler.post(r);
+//            mIntent=new Intent();
+//            mIntent.setAction("MY_INTENT");
 
-
-
-        // Create a location callback
-        mLocationCallback = new LocationCallback() {
-            @Override
-            public void onLocationResult(LocationResult locationResult) {
-                Log.i(TAG,"onLocationResult");
-                super.onLocationResult(locationResult);
-                mCurrentLocation = locationResult.getLastLocation();
-                mLastUpdateTime = DateFormat.getTimeInstance().format(new Date());
-//                publishGnssFix(locationResult.getLocations());
-                updateUI();
-                if(mCurrentLocation.getProvider()==LocationManager.NETWORK_PROVIDER){
-                    if (mPseudorangePositionVelocityFromRealTimeEvents == null){
-                        return;
-                    }
-                    final Runnable r = new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                mPseudorangePositionVelocityFromRealTimeEvents.setReferencePosition(
-                                        ((int) (mCurrentLocation.getLatitude() * 1E3)) *10000,
-                                        ((int) (mCurrentLocation.getLongitude() * 1E3)) *10000,
-                                        ((int) (mCurrentLocation.getAltitude() * 1E3)) *10000);
-                            } catch (Exception e) {
-                                Log.e(TAG, " Exception setting reference location : ", e);
-                            }
-                        }
-                    };
-                    mMyPositionVelocityCalculationHandler.post(r);
-                }
-                else if (mCurrentLocation.getProvider() == LocationManager.GPS_PROVIDER){
-                    final Runnable r = new Runnable() {
-                        @Override
-                        public void run() {
-                            if (mPseudorangePositionVelocityFromRealTimeEvents == null) {
-                                return;
-                            }
-                            double[] posSolution =
-                                    mPseudorangePositionVelocityFromRealTimeEvents.getPositionSolutionLatLngDeg();
-                            double[] velSolution =
-                                    mPseudorangePositionVelocityFromRealTimeEvents.getVelocitySolutionEnuMps();
-                            double[] pvUncertainty =
-                                    mPseudorangePositionVelocityFromRealTimeEvents
-                                            .getPositionVelocityUncertaintyEnu();
-                            if (Double.isNaN(posSolution[0])) {
-                                logPositionFromRawDataEvent("No Position Calculated Yet");
-                                logPositionError("And no offset calculated yet...");
-                            } else {
-//                                        if (mResidualPlotStatus != RESIDUAL_MODE_DISABLED
-//                                                && mResidualPlotStatus != RESIDUAL_MODE_AT_INPUT_LOCATION) {
-                                updateGroundTruth(posSolution);
-//                                        }
-                                String formattedLatDegree = new DecimalFormat("##.######").format(posSolution[0]);
-                                String formattedLngDegree = new DecimalFormat("##.######").format(posSolution[1]);
-                                String formattedAltMeters = new DecimalFormat("##.#").format(posSolution[2]);
-                                logPositionFromRawDataEvent(
-                                        "latDegrees = "
-                                                + formattedLatDegree
-                                                + " lngDegrees = "
-                                                + formattedLngDegree
-                                                + "altMeters = "
-                                                + formattedAltMeters);
-                                String formattedVelocityEastMps =
-                                        new DecimalFormat("##.###").format(velSolution[0]);
-                                String formattedVelocityNorthMps =
-                                        new DecimalFormat("##.###").format(velSolution[1]);
-                                String formattedVelocityUpMps =
-                                        new DecimalFormat("##.###").format(velSolution[2]);
-                                logVelocityFromRawDataEvent(
-                                        "Velocity East = "
-                                                + formattedVelocityEastMps
-                                                + "mps"
-                                                + " Velocity North = "
-                                                + formattedVelocityNorthMps
-                                                + "mps"
-                                                + "Velocity Up = "
-                                                + formattedVelocityUpMps
-                                                + "mps");
-
-                                String formattedPosUncertaintyEastMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[0]);
-                                String formattedPosUncertaintyNorthMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[1]);
-                                String formattedPosUncertaintyUpMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[2]);
-                                logPositionUncertainty(
-                                        "East = "
-                                                + formattedPosUncertaintyEastMeters
-                                                + "m North = "
-                                                + formattedPosUncertaintyNorthMeters
-                                                + "m Up = "
-                                                + formattedPosUncertaintyUpMeters
-                                                + "m");
-                                String formattedVelUncertaintyEastMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[3]);
-                                String formattedVelUncertaintyNorthMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[4]);
-                                String formattedVelUncertaintyUpMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[5]);
-                                logVelocityUncertainty(
-                                        "East = "
-                                                + formattedVelUncertaintyEastMeters
-                                                + "mps North = "
-                                                + formattedVelUncertaintyNorthMeters
-                                                + "mps Up = "
-                                                + formattedVelUncertaintyUpMeters
-                                                + "mps");
-                                String formattedOffsetMeters =
-                                        new DecimalFormat("##.######")
-                                                .format(
-                                                        getDistanceMeters(
-                                                                mCurrentLocation.getLatitude(),
-                                                                mCurrentLocation.getLongitude(),
-                                                                posSolution[0],
-                                                                posSolution[1]));
-                                logPositionError("position offset = " + formattedOffsetMeters + " meters");
-                                String formattedSpeedOffsetMps =
-                                        new DecimalFormat("##.###")
-                                                .format(
-                                                        Math.abs(
-                                                                mCurrentLocation.getSpeed()
-                                                                        - Math.sqrt(
-                                                                        Math.pow(velSolution[0], 2)
-                                                                                + Math.pow(velSolution[1], 2))));
-                                logVelocityError("speed offset = " + formattedSpeedOffsetMps + " mps");
-                            }
-                            logLocationEvent("onLocationChanged: " + mCurrentLocation);
-                            publish();
-                        }
-                    };
-                    mMyPositionVelocityCalculationHandler.post(r);
-                }
-                else{
-                    final Runnable r = new Runnable() {
-                        @Override
-                        public void run() {
-                            if (mPseudorangePositionVelocityFromRealTimeEvents == null){
-                                return;
-                            }
-                            try {
-                                mPseudorangePositionVelocityFromRealTimeEvents.setReferencePosition(
-                                        ((int) (mCurrentLocation.getLatitude() * 1E3)) *10000,
-                                        ((int) (mCurrentLocation.getLongitude() * 1E3)) *10000,
-                                        ((int) (mCurrentLocation.getAltitude() * 1E3)) *10000);
-                            } catch (Exception e) {
-                                Log.e(TAG, " Exception setting reference location : ", e);
-                            }
-
-                            double[] posSolution =
-                                    mPseudorangePositionVelocityFromRealTimeEvents.getPositionSolutionLatLngDeg();
-                            double[] velSolution =
-                                    mPseudorangePositionVelocityFromRealTimeEvents.getVelocitySolutionEnuMps();
-                            double[] pvUncertainty =
-                                    mPseudorangePositionVelocityFromRealTimeEvents
-                                            .getPositionVelocityUncertaintyEnu();
-                            if (Double.isNaN(posSolution[0])) {
-                                logPositionFromRawDataEvent("No Position Calculated Yet");
-                                logPositionError("And no offset calculated yet...");
-                            } else {
-//                                        if (mResidualPlotStatus != RESIDUAL_MODE_DISABLED
-//                                                && mResidualPlotStatus != RESIDUAL_MODE_AT_INPUT_LOCATION) {
-                                updateGroundTruth(posSolution);
-//                                        }
-                                String formattedLatDegree = new DecimalFormat("##.######").format(posSolution[0]);
-                                String formattedLngDegree = new DecimalFormat("##.######").format(posSolution[1]);
-                                String formattedAltMeters = new DecimalFormat("##.#").format(posSolution[2]);
-                                logPositionFromRawDataEvent(
-                                        "latDegrees = "
-                                                + formattedLatDegree
-                                                + " lngDegrees = "
-                                                + formattedLngDegree
-                                                + "altMeters = "
-                                                + formattedAltMeters);
-                                String formattedVelocityEastMps =
-                                        new DecimalFormat("##.###").format(velSolution[0]);
-                                String formattedVelocityNorthMps =
-                                        new DecimalFormat("##.###").format(velSolution[1]);
-                                String formattedVelocityUpMps =
-                                        new DecimalFormat("##.###").format(velSolution[2]);
-                                logVelocityFromRawDataEvent(
-                                        "Velocity East = "
-                                                + formattedVelocityEastMps
-                                                + "mps"
-                                                + " Velocity North = "
-                                                + formattedVelocityNorthMps
-                                                + "mps"
-                                                + "Velocity Up = "
-                                                + formattedVelocityUpMps
-                                                + "mps");
-
-                                String formattedPosUncertaintyEastMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[0]);
-                                String formattedPosUncertaintyNorthMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[1]);
-                                String formattedPosUncertaintyUpMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[2]);
-                                logPositionUncertainty(
-                                        "East = "
-                                                + formattedPosUncertaintyEastMeters
-                                                + "m North = "
-                                                + formattedPosUncertaintyNorthMeters
-                                                + "m Up = "
-                                                + formattedPosUncertaintyUpMeters
-                                                + "m");
-                                String formattedVelUncertaintyEastMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[3]);
-                                String formattedVelUncertaintyNorthMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[4]);
-                                String formattedVelUncertaintyUpMeters =
-                                        new DecimalFormat("##.###").format(pvUncertainty[5]);
-                                logVelocityUncertainty(
-                                        "East = "
-                                                + formattedVelUncertaintyEastMeters
-                                                + "mps North = "
-                                                + formattedVelUncertaintyNorthMeters
-                                                + "mps Up = "
-                                                + formattedVelUncertaintyUpMeters
-                                                + "mps");
-                                String formattedOffsetMeters =
-                                        new DecimalFormat("##.######")
-                                                .format(
-                                                        getDistanceMeters(
-                                                                mCurrentLocation.getLatitude(),
-                                                                mCurrentLocation.getLongitude(),
-                                                                posSolution[0],
-                                                                posSolution[1]));
-                                logPositionError("position offset = " + formattedOffsetMeters + " meters");
-                                String formattedSpeedOffsetMps =
-                                        new DecimalFormat("##.###")
-                                                .format(
-                                                        Math.abs(
-                                                                mCurrentLocation.getSpeed()
-                                                                        - Math.sqrt(
-                                                                        Math.pow(velSolution[0], 2)
-                                                                                + Math.pow(velSolution[1], 2))));
-                                logVelocityError("speed offset = " + formattedSpeedOffsetMps + " mps");
-                            }
-                            logLocationEvent("onLocationChanged: " + mCurrentLocation);
-                            publish();
-                        }
-                    };
-                    mMyPositionVelocityCalculationHandler.post(r);
-                }
-            }
-        };
-        // Build the location request
-        mLocationRequest = new LocationRequest();
-        mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
-        mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        // Build the location settings request object
-        LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder();
-        builder.addLocationRequest(mLocationRequest);
-        mLocationSettingsRequest = builder.build();
-
-        // Create a navigation callback
-        mGnssNavigationMessageCallback =
-                new GnssNavigationMessage.Callback() {
-                    @Override
-                    public void onGnssNavigationMessageReceived(GnssNavigationMessage event) {
-                        Log.i(TAG,"onGnssNavigationMessageReceived");
-                        super.onGnssNavigationMessageReceived(event);
-//                        if (event.getType() == GnssNavigationMessage.TYPE_GPS_L1CA) {
-                            mPseudorangePositionVelocityFromRealTimeEvents.parseHwNavigationMessageUpdates(event);
-//                        }
-
-                    }
-                };
-
-        mGnssMeasurementsEventCallback =
-                new GnssMeasurementsEvent.Callback() {
-                    @Override
-                    public void onGnssMeasurementsReceived(final GnssMeasurementsEvent event) {
-                        Log.i(TAG,"onGnssMeasurementsReceived");
-                        super.onGnssMeasurementsReceived(event);
-                        final Runnable r = new Runnable() {
-                            @Override
-                            public void run() {
-                                try {
-                                    mPseudorangePositionVelocityFromRealTimeEvents.setCorrectedResidualComputationTruthLocationLla(posSolution);
-                                    mPseudorangePositionVelocityFromRealTimeEvents.computePositionVelocitySolutionsFromRawMeas(event);    /** main computation */
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                }
-                            }
-                        };
-                        mMyPositionVelocityCalculationHandler.post(r);
-                    }
-                };
-
-        mLocationManager.registerGnssNavigationMessageCallback(mGnssNavigationMessageCallback);
-        mLocationManager.registerGnssMeasurementsCallback(mGnssMeasurementsEventCallback);
-
-    }
-
-    private void updateUI() {
-        // Return if we do not have a position
-        if (mCurrentLocation == null)
-            return;
-        // Else we are good to display
-        String lat = String.valueOf(mCurrentLocation.getLatitude());
-        String lng = String.valueOf(mCurrentLocation.getLongitude());
-        tvLocation.setText("At Time: " + mLastUpdateTime + "\n" +
-                "Latitude: " + lat + "\n" +
-                "Longitude: " + lng + "\n" +
-                "Accuracy: " + mCurrentLocation.getAccuracy() + "\n" +
-                "Provider: " + mCurrentLocation.getProvider());
-        Log.d(TAG, tvLocation.getText().toString().replace("\n", " | "));
-    }
-
-/*
-    private void publishGnssFix(List<Location> locs) {
-        // Check that we have a location
-        if (locs == null || locs.size() < 1)
-            return;
-        // We are good, lets publish
-        for (Location location : locs) {
-            NavSatFix fix = this.pub_fix.newMessage();
-            fix.getHeader().setStamp(new Time(location.getTime()));
-            fix.getHeader().setFrameId("android/"+robotName+"/gps");
-            fix.getStatus().setStatus(NavSatStatus.STATUS_FIX);
-            fix.getStatus().setService(NavSatStatus.SERVICE_GPS);
-            fix.setLatitude(mCurrentLocation.getLatitude());
-            fix.setLongitude(mCurrentLocation.getLongitude());
-            fix.setAltitude(mCurrentLocation.getAltitude());
-            fix.setPositionCovarianceType(NavSatFix.COVARIANCE_TYPE_APPROXIMATED);
-            double covariance = mCurrentLocation.getAccuracy()*mCurrentLocation.getAccuracy();
-            double[] tmpCov = {covariance, 0, 0, 0, covariance, 0, 0, 0, covariance};
-            fix.setPositionCovariance(tmpCov);
-            pub_fix.publish(fix);
+//            mIntent = mainAct.getIntent();
+//            mIntent.setClassName("com.google.android.apps.location.gps.gnsslogger","com.google.android.apps.location.gps.gnsslogger.MainActivity");
+//            mainAct.startService(mIntent);
+//
         }
-        // Debug
-        Log.d(TAG, "published = "+locs.size());
-    }
-*/
-
-    private void publish() {
-        if (posSolution==null || velSolution==null || pvUncertainty==null){
-            return;
+        catch (NameNotFoundException e) {
+            Log.e("SharedPref", e.getLocalizedMessage());
         }
 
-        NavSatFix fix = pub_fix.newMessage();
-        fix.getHeader().setStamp(new Time(mCurrentLocation.getTime()));
-        fix.getHeader().setFrameId("android/"+robotName+"/gnss/fixENU");
-        fix.getStatus().setStatus(NavSatStatus.STATUS_FIX);
-        fix.getStatus().setService(NavSatStatus.SERVICE_GPS);
-        fix.setLatitude(posSolution[0]);
-        fix.setLongitude(posSolution[1]);
-        fix.setAltitude(posSolution[2]);
-        double[] pos_cov={pvUncertainty[0],0.0,0.0,0.0,pvUncertainty[1],0.0,0.0,0.0,pvUncertainty[2]};
-        fix.setPositionCovariance(pos_cov);
-        fix.setPositionCovarianceType(NavSatFix.COVARIANCE_TYPE_APPROXIMATED);
-        pub_fix.publish(fix);
-
-        AccelWithCovarianceStamped accel=pub_accel.newMessage();
-        accel.getHeader().setStamp(new Time(mCurrentLocation.getTime()));
-        accel.getHeader().setFrameId("android/"+robotName+"/gnss/accelENU");
-        accel.getAccel().getAccel().getLinear().setX(velSolution[0]);
-        accel.getAccel().getAccel().getLinear().setY(velSolution[1]);
-        accel.getAccel().getAccel().getLinear().setZ(velSolution[2]);
-        double[] accel_cov={
-                pvUncertainty[3],   0.0,                0.0,                0.0,    0.0,    0.0,
-                0.0,                pvUncertainty[4],   0.0,                0.0,    0.0,    0.0,
-                0.0,                0.0,                pvUncertainty[5],   0.0,    0.0,    0.0,
-                0.0,                0.0,                0.0,                0.0,    0.0,    0.0,
-                0.0,                0.0,                0.0,                0.0,    0.0,    0.0,
-                0.0,                0.0,                0.0,                0.0,    0.0,    0.0};
-        accel.getAccel().setCovariance(accel_cov);
-        pub_accel.publish(accel);
     }
-
-
-    //===========================================================================================
-    //===========================================================================================
-    //===========================================================================================
-    //===========================================================================================
 
     @Override
     public GraphName getDefaultNodeName() {
-        return GraphName.of("sensors_driver/navsatfix_publisher");
+        return GraphName.of("sensors_driver/gnss_publisher");
     }
 
     @Override
     public void onStart(ConnectedNode connectedNode) {
-        // Start location updates
-        startLocationUpdates();
-        // Create our pub_fix, pub_accel
         try {
             this.pub_fix = connectedNode.newPublisher("android/" + robotName + "/gnss/fix", "sensor_msgs/NavSatFix");
-            this.pub_accel= connectedNode.newPublisher("android/" + robotName + "/gnss/accelENU", "geometry_msgs/AccelWithCovarianceStamped");
+            this.pub_accel = connectedNode.newPublisher("android/" + robotName + "/gnss/accelENU", "geometry_msgs/AccelWithCovarianceStamped");
 
-        } catch (Exception e) {
+            mGnssLoggerReceiver = new GnssLoggerReceiver(robotName,tvLocation,pub_fix,pub_accel);
+            mIntentFilter=new IntentFilter("Gnss");
+            mainAct.registerReceiver(mGnssLoggerReceiver,mIntentFilter);
+            mGnssLoggerReceiver.isGnssloggerLaunched=mGnssLogger.getBoolean("isGnssloggerLaunched",false);
+            mGnssLoggerReceiver.isLocationChecked=mGnssLogger.getBoolean("isLocationChecked",false);
+            mGnssLoggerReceiver.isMeasurementChecked=mGnssLogger.getBoolean("isMeasurementChecked",false);
+            uiUpdate();
+
+            while (!mIsShutdown){
+                Thread.sleep(1000);
+                uiUpdate();
+            }
+
+
+//            while(!mIsShutdown){
+//                checkGnssLoggerChanged();
+//                Thread.sleep(1000);
+//            }
+
+
+
+//            mBroadcastReceiver = new BroadcastReceiver() {
+//                @Override
+//                public void onReceive(Context context, Intent intent) {
+////                    Bundle bundle=intent.getExtras();
+////                    String str= Integer.toString(bundle.getInt("key"));
+////                    Log.d(TAG,str);
+//                    Log.d(TAG,"Message Received");
+//                }
+//            };
+//            mFilter=new IntentFilter();
+//            mFilter.addAction("Gnss");
+//            mainAct.registerReceiver(mBroadcastReceiver,mFilter);
+
+//            mGnssLoggerListener = new SharedPreferences.OnSharedPreferenceChangeListener() {
+//                @Override
+//                public void onSharedPreferenceChanged(SharedPreferences prefs, String key) {
+//                    // TODO
+//                    onGnssLoggerChanged(prefs, key);
+//                }
+//            };
+//            mGnssLogger.registerOnSharedPreferenceChangeListener(mGnssLoggerListener);
+
+
+
+//            int i=0;
+
+/*            while(!mIsShutdown){
+
+                boolean isGnssloggerLaunched=mGnssLogger.getBoolean("isGnssloggerLaunched",false);
+                if(!isGnssloggerLaunched){
+                    tvLocation.setText("Not launched GnssLogger App");
+                }
+                else{
+                    boolean isLocationChecked=mGnssLogger.getBoolean("isLocationChecked",false);
+                    boolean isMeasurementChecked=mGnssLogger.getBoolean("isMeasurementChecked",false);
+
+                    if(!isLocationChecked || !isMeasurementChecked){
+                        tvLocation.setText("Checking Location and Measurement Label to Start");
+                    }
+                    else{
+                        String display="";
+                        boolean onGnssMeasurementsReceived=mGnssLogger.getBoolean("onGnssMeasurementsReceived",false);
+                        if(onGnssMeasurementsReceived){
+                            display+="Received GNSS Measurements";
+                            mGnssLoggerEditor.putBoolean("onGnssMeasurementsReceived",false);
+                            mGnssLoggerEditor.commit();
+                        }
+                        else{
+                            display+="Not Received GNSS Measurements";
+                        }
+                        boolean onLocationChanged=mGnssLogger.getBoolean("onLocationChanged",false);
+                        if(onLocationChanged){
+
+                            display+="Calculated Position and Velocity";
+                            String pos_vel = mGnssLogger.getString("pos_vel","");
+                            update(pos_vel);
+
+                            mGnssLoggerEditor.putBoolean("onLocationChanged",false);
+                            mGnssLoggerEditor.commit();
+                        }
+                        else{
+                            display+="Not Calculated Position and Velocity";
+                        }
+                        tvLocation.setText(display);
+                    }
+
+                }
+
+                Thread.sleep(100);
+
+            }*/
+
+
+        }
+        catch (Exception e) {
             if (connectedNode != null) {
 //                connectedNode.getLog().fatal(e);
             } else {
@@ -535,7 +201,9 @@ public class GnssPublisher implements NodeMain {
 
     @Override
     public void onShutdown(Node node) {
-        stopLocationUpdates();
+        Log.d(TAG,"onShutdown");
+        mainAct.unregisterReceiver(mGnssLoggerReceiver);
+        mIsShutdown=true;
     }
 
     @Override
@@ -544,148 +212,369 @@ public class GnssPublisher implements NodeMain {
     @Override
     public void onError(Node node, Throwable throwable) {}
 
-    //===========================================================================================
-    //===========================================================================================
-    //===========================================================================================
-    //===========================================================================================
-
-
-    private void startLocationUpdates() {
-        // Begin by checking if the device has the necessary location settings.
-        mSettingsClient.checkLocationSettings(mLocationSettingsRequest)
-                .addOnSuccessListener(mainAct, new OnSuccessListener<LocationSettingsResponse>() {
-                    @Override
-                    public void onSuccess(LocationSettingsResponse locationSettingsResponse) {
-                        Log.i(TAG, "All location settings are satisfied.");
-                        //noinspection MissingPermission
-                        mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
-                        updateUI();
-                    }
-                })
-                .addOnFailureListener(mainAct, new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        int statusCode = ((ApiException) e).getStatusCode();
-                        switch (statusCode) {
-                            case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
-                                Log.i(TAG, "Location settings are not satisfied. Attempting to upgrade location settings ");
-                                try {
-                                    // Show the dialog by calling startResolutionForResult(), and check the
-                                    // result in onActivityResult().
-                                    ResolvableApiException rae = (ResolvableApiException) e;
-                                    rae.startResolutionForResult(mainAct, REQUEST_CHECK_SETTINGS);
-                                } catch (IntentSender.SendIntentException sie) {
-                                    Log.i(TAG, "PendingIntent unable to execute request.");
-                                }
-                                break;
-                            case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
-                                String errorMessage = "Location settings are inadequate, and cannot be fixed here. Fix in Settings.";
-                                Log.e(TAG, errorMessage);
-                                Toast.makeText(mainAct, errorMessage, Toast.LENGTH_LONG).show();
-                        }
-
-                        updateUI();
-                    }
-                });
-    }
-
-
-    private void stopLocationUpdates() {
-        mFusedLocationClient.removeLocationUpdates(mLocationCallback);
-    }
-
     /**
-     * Return the distance (measured along the surface of the sphere) between 2 points
+     *
      */
-    public double getDistanceMeters(
-            double lat1Degree, double lng1Degree, double lat2Degree, double lng2Degree) {
+    private void uiUpdate() {
 
-        double deltaLatRadian = Math.toRadians(lat2Degree - lat1Degree);
-        double deltaLngRadian = Math.toRadians(lng2Degree - lng1Degree);
+        String strGnssloggerLaunched = "GNSS Logger: ";
+        if (mGnssLoggerReceiver.isGnssloggerLaunched)
+            strGnssloggerLaunched += "on";
+        else
+            strGnssloggerLaunched += "off";
 
-        double a =
-                Math.sin(deltaLatRadian / 2) * Math.sin(deltaLatRadian / 2)
-                        + Math.cos(Math.toRadians(lat1Degree))
-                        * Math.cos(Math.toRadians(lat2Degree))
-                        * Math.sin(deltaLngRadian / 2)
-                        * Math.sin(deltaLngRadian / 2);
-        double angularDistanceRad = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        String strLocationMeasurementChecked = "Location & Measurements: ";
+        if (mGnssLoggerReceiver.isLocationChecked && mGnssLoggerReceiver.isMeasurementChecked)
+            strLocationMeasurementChecked += "on";
+        else
+            strLocationMeasurementChecked += "off";
 
-        return EARTH_RADIUS_METERS * angularDistanceRad;
+        String numS= Integer.toString(mGnssLoggerReceiver.numberOfUsefulSatellities);
+
+        String lat = "Latitude: " + mGnssLoggerReceiver.posSolution[0];
+        String lon = "Longitude: " + mGnssLoggerReceiver.posSolution[1];
+        String velE = "VelocityEast: " + mGnssLoggerReceiver.velSolution[0];
+        String velN = "VelocityNorth: " + mGnssLoggerReceiver.velSolution[1];
+
+/*
+        String text = strGnssloggerLaunched + "\n" +
+                strLocationMeasurementChecked + "\n" +
+                lat + "\n" + lon + "\n" + velE + "\n" + velN;
+*/
+
+        String text = strGnssloggerLaunched + "\n" +
+                strLocationMeasurementChecked + "\n" +
+                numS+ "\n"+
+                mGnssLoggerReceiver.strCalculatedPositionVelocity;
+
+        tvLocation.setText(text);
+
     }
 
 
-    /**
-     * Update the ground truth for pseudorange residual analysis based on the user activity.
-     */
-    private synchronized void updateGroundTruth(double[] posSolution) {
+    private class GnssLoggerReceiver extends BroadcastReceiver {
 
-        // In case of switching between modes, last ground truth from previous mode will be used.
-        if (mGroundTruth == null) {
-            // If mGroundTruth has not been initialized, we set it to be the same as position solution
-            mGroundTruth = new double[] {0.0, 0.0, 0.0};
-            mGroundTruth[0] = posSolution[0];
-            mGroundTruth[1] = posSolution[1];
-            mGroundTruth[2] = posSolution[2];
+        private String TAG = "GnssLoggerReceiver";
+
+        private String robotName;
+        private MainActivity mainAct;
+        private TextView tvLocation;
+
+        private Publisher<NavSatFix> pub_fix;
+        private Publisher<AccelWithCovarianceStamped> pub_accel;
+
+        int numberOfUsefulSatellities = 0;
+        String strCalculatedPositionVelocity = "";
+        double[] posSolution = {NaN,NaN,NaN};
+        double[] velSolution = {NaN,NaN,NaN};
+        double[] posUncertainty = {NaN,NaN,NaN};
+        double[] velUncertainty = {NaN,NaN,NaN};
+
+        boolean isGnssloggerLaunched = false;
+        boolean isLocationChecked = false;
+        boolean isMeasurementChecked = false;
+
+        GnssLoggerReceiver(){};
+
+        /**
+         * @param robotName
+         * @param tvLocation
+         * @param pub_fix
+         * @param pub_accel
+         */
+        GnssLoggerReceiver(String robotName, TextView tvLocation, Publisher<NavSatFix> pub_fix, Publisher<AccelWithCovarianceStamped> pub_accel) {
+            this.robotName = robotName;
+            this.tvLocation = tvLocation;
+            this.pub_fix = pub_fix;
+            this.pub_accel = pub_accel;
+//            uiUpdate();
         }
+
+
+        /**
+         * @param context
+         * @param intent
+         */
+        @Override
+        public void onReceive(Context context, Intent intent) {
+
+            Log.d(TAG, "onReceive");
+
+            String className = intent.getStringExtra("className");
+            if (className.equals("MainActivity"))
+                runMainActivity(intent);
+            else if (className.equals("SettingsFragment"))
+                runSettingsFragment(intent);
+            else if (className.equals("RealTimePositionVelocityCalculator"))
+                runRealTimePositionVelocityCalculator(intent);
+            else
+                Log.w(TAG, "No class");
+
+            uiUpdate();
+
+        }
+
+        /**
+         * @param intent
+         */
+        private void runMainActivity(Intent intent) {
+            isGnssloggerLaunched = intent.getBooleanExtra("isGnssloggerLaunched", false);
+            Log.d(TAG, "isGnssloggerLaunched = " + Boolean.toString(isGnssloggerLaunched));
+        }
+
+        /**
+         * @param intent
+         */
+        private void runSettingsFragment(Intent intent) {
+            isLocationChecked = intent.getBooleanExtra("isLocationChecked", false);
+            isMeasurementChecked = intent.getBooleanExtra("isMeasurementChecked", false);
+            Log.d(TAG, "isLocationChecked = " + Boolean.toString(isLocationChecked));
+            Log.d(TAG, "isMeasurementChecked = " + Boolean.toString(isMeasurementChecked));
+
+        }
+
+        /**
+         * @param intent
+         */
+        private void runRealTimePositionVelocityCalculator(Intent intent) {
+
+            numberOfUsefulSatellities = intent.getIntExtra("numberOfUsefulSatellities", 0);
+            strCalculatedPositionVelocity = intent.getStringExtra("calculatedPositionVelocity");
+
+            Log.d(TAG,strCalculatedPositionVelocity);
+
+            if(strCalculatedPositionVelocity!="") {
+                String[] values = strCalculatedPositionVelocity.split(" ");
+                posSolution[0] = Double.valueOf(values[0]);
+                posSolution[1] = Double.valueOf(values[1]);
+                posSolution[2] = Double.valueOf(values[2]);
+                velSolution[0] = Double.valueOf(values[3]);
+                velSolution[1] = Double.valueOf(values[4]);
+                velSolution[2] = Double.valueOf(values[5]);
+                posUncertainty[0] = Double.valueOf(values[6]);
+                posUncertainty[1] = Double.valueOf(values[7]);
+                posUncertainty[2] = Double.valueOf(values[8]);
+                velUncertainty[0] = Double.valueOf(values[9]);
+                velUncertainty[1] = Double.valueOf(values[10]);
+                velUncertainty[2] = Double.valueOf(values[11]);
+
+                publish();
+            }
+        }
+
+        /**
+         *
+         */
+        private void publish() {
+
+            NavSatFix fix = pub_fix.newMessage();
+            fix.getHeader().setStamp(Time.fromMillis(System.currentTimeMillis()));
+            fix.getHeader().setFrameId("android/" + robotName + "/gnss/fixENU");
+            fix.getStatus().setStatus(NavSatStatus.STATUS_FIX);
+            fix.getStatus().setService(NavSatStatus.SERVICE_GPS);
+            fix.setLatitude(posSolution[0]);
+            fix.setLongitude(posSolution[1]);
+            fix.setAltitude(posSolution[2]);
+            double[] pos_cov = {posUncertainty[0], 0.0, 0.0, 0.0, posUncertainty[1], 0.0, 0.0, 0.0, posUncertainty[2]};
+            fix.setPositionCovariance(pos_cov);
+            fix.setPositionCovarianceType(NavSatFix.COVARIANCE_TYPE_APPROXIMATED);
+            pub_fix.publish(fix);
+
+            AccelWithCovarianceStamped accel = pub_accel.newMessage();
+            accel.getHeader().setStamp(Time.fromMillis(System.currentTimeMillis()));
+            accel.getHeader().setFrameId("android/" + robotName + "/gnss/accelENU");
+            accel.getAccel().getAccel().getLinear().setX(velSolution[0]);
+            accel.getAccel().getAccel().getLinear().setY(velSolution[1]);
+            accel.getAccel().getAccel().getLinear().setZ(velSolution[2]);
+            double[] accel_cov = {
+                    velUncertainty[0], 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, velUncertainty[1], 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, velUncertainty[2], 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+            accel.getAccel().setCovariance(accel_cov);
+            pub_accel.publish(accel);
+        }
+
     }
 
 
+        /**
+         *
+         * @param gnssLogger
+         * @param s
+         */
+ /*   private void onGnssLoggerChanged(SharedPreferences gnssLogger, String s){
+
+        Log.d(TAG,"Called onGnssLoggerChanged");
+        boolean isGnssloggerLaunched=gnssLogger.getBoolean("isGnssloggerLaunched",false);
+        if(!isGnssloggerLaunched){
+            String text="Not launched GnssLogger App";
+            Log.d(TAG,text);
+            tvLocation.setText(text);
+        }
+        else{
+            boolean isLocationChecked=gnssLogger.getBoolean("isLocationChecked",false);
+            boolean isMeasurementChecked=gnssLogger.getBoolean("isMeasurementChecked",false);
+
+            if(!isLocationChecked || !isMeasurementChecked){
+                String text="Clicking Location and Measurement Label to Start";
+                Log.d(TAG,text);
+                tvLocation.setText(text);
+            }
+            else{
+                String display="";
+                boolean onGnssMeasurementsReceived=gnssLogger.getBoolean("onGnssMeasurementsReceived",false);
+                if(onGnssMeasurementsReceived){
+                    display+="Received GNSS Measurements\n";
+                    mGnssLoggerEditor.putBoolean("onGnssMeasurementsReceived",false);
+                    mGnssLoggerEditor.commit();
+                }
+                else{
+                    display+="Not Received GNSS Measurements\n";
+                }
+                boolean onLocationChanged=gnssLogger.getBoolean("onLocationChanged",false);
+                if(onLocationChanged){
+
+                    display+="Calculated Position and Velocity\n";
+                    String pos_vel = gnssLogger.getString("pos_vel","");
+                    update(pos_vel);
+
+                    mGnssLoggerEditor.putBoolean("onLocationChanged",false);
+                    mGnssLoggerEditor.commit();
+                }
+                else{
+                    display+="Not Calculated Position and Velocity\n";
+                }
+                tvLocation.setText(display);
+            }
+
+        }
 
 
-    private void logEvent(String tag, String message, int color) {
-        String composedTag = TAG +": "+ tag;
-        Log.d(composedTag, message);
-        logText(tag, message, color);
+
+
+    }*/
+
+    /**
+     *
+     */
+/*
+    private void checkGnssLoggerChanged(){
+
+        Log.d(TAG,"Called checkGnssLoggerChanged");
+        if(!mGnssLoggerReceiver.isGnssloggerLaunched){
+            String text="Not launched GnssLogger App";
+            Log.d(TAG,text);
+            tvLocation.setText(text);
+        }
+        else {
+            if(!mGnssLoggerReceiver.isLocationChecked || !mGnssLoggerReceiver.isMeasurementChecked){
+                String text="Clicking Location and Measurement Label to Start";
+                Log.d(TAG,text);
+                tvLocation.setText(text);
+            }
+            else{
+                String display="";
+                if(mGnssLoggerReceiver.onGnssMeasurementsReceived){
+                    display+="Received GNSS Measurements\n";
+                    mGnssLoggerEditor.putBoolean("onGnssMeasurementsReceived",false);
+                    mGnssLoggerEditor.commit();
+                }
+                else{
+                    display+="Not Received GNSS Measurements\n";
+                }
+                if(!mGnssLoggerReceiver.pos_vel.equals("")){
+                    display+="Calculated Position and Velocity\n";
+                    String pos_vel = mGnssLoggerReceiver.pos_vel;
+                    update(pos_vel);
+
+                    mGnssLoggerEditor.putBoolean("onLocationChanged",false);
+                    mGnssLoggerEditor.commit();
+                }
+                else{
+                    display+="Not Calculated Position and Velocity\n";
+                }
+                tvLocation.setText(display);
+            }
+        }
+
     }
+*/
 
-    private void logText(String tag, String text, int color) {
-//        UIResultComponent component = getUiResultComponent();
-//        if (component != null) {
-//            component.logTextResults(tag, text, color);
-//        }
+    /**
+     *
+     */
+/*
+    private void update(String pos_vel){
+
+        String[] values=pos_vel.split(" ");
+        posSolution[0]=Double.valueOf(values[0]);
+        posSolution[1]=Double.valueOf(values[1]);
+        posSolution[2]=Double.valueOf(values[2]);
+        velSolution[0]=Double.valueOf(values[3]);
+        velSolution[1]=Double.valueOf(values[4]);
+        velSolution[2]=Double.valueOf(values[5]);
+        posUncertainty[0]=Double.valueOf(values[6]);
+        posUncertainty[1]=Double.valueOf(values[7]);
+        posUncertainty[2]=Double.valueOf(values[8]);
+        velUncertainty[0]=Double.valueOf(values[9]);
+        velUncertainty[1]=Double.valueOf(values[10]);
+        velUncertainty[2]=Double.valueOf(values[11]);
+
+        if(Double.isNaN(posSolution[0]) || Double.isNaN(posSolution[1]) || Double.isNaN(posSolution[2]) ||
+                Double.isNaN(velSolution[0]) || Double.isNaN(velSolution[1]) || Double.isNaN(velSolution[2]) ||
+                Double.isNaN(posUncertainty[0]) || Double.isNaN(posUncertainty[1]) || Double.isNaN(posUncertainty[2]) ||
+                Double.isNaN(velUncertainty[0]) || Double.isNaN(velUncertainty[1]) || Double.isNaN(velUncertainty[2])){
+            tvLocation.setText("GnssLogger Outputing Nan Values");
+        }
+
+        publish();
+        tvLocation.setText("");
+
     }
+*/
 
-    public void logLocationEvent(String event) {
-//        mCurrentColor = getNextColor();
-        logEvent("Location", event, mCurrentColor);
+    /**
+     *
+     */
+/*
+    private void publish() {
+
+        NavSatFix fix = pub_fix.newMessage();
+        fix.getHeader().setStamp(time);
+        fix.getHeader().setStamp(time);
+        fix.getHeader().setFrameId("android/"+robotName+"/gnss/fixENU");
+        fix.getStatus().setStatus(NavSatStatus.STATUS_FIX);
+        fix.getStatus().setService(NavSatStatus.SERVICE_GPS);
+        fix.setLatitude(posSolution[0]);
+        fix.setLongitude(posSolution[1]);
+        fix.setAltitude(posSolution[2]);
+        double[] pos_cov={posUncertainty[0],0.0,0.0,0.0,posUncertainty[1],0.0,0.0,0.0,posUncertainty[2]};
+        fix.setPositionCovariance(pos_cov);
+        fix.setPositionCovarianceType(NavSatFix.COVARIANCE_TYPE_APPROXIMATED);
+        pub_fix.publish(fix);
+
+        AccelWithCovarianceStamped accel=pub_accel.newMessage();
+        long time_delta_millis = System.currentTimeMillis() - SystemClock.uptimeMillis();
+        accel.getHeader().setStamp(time);
+        accel.getHeader().setFrameId("android/"+robotName+"/gnss/accelENU");
+        accel.getAccel().getAccel().getLinear().setX(velSolution[0]);
+        accel.getAccel().getAccel().getLinear().setY(velSolution[1]);
+        accel.getAccel().getAccel().getLinear().setZ(velSolution[2]);
+        double[] accel_cov={
+                velUncertainty[0],   0.0,                0.0,                0.0,    0.0,    0.0,
+                0.0,                velUncertainty[1],   0.0,                0.0,    0.0,    0.0,
+                0.0,                0.0,                velUncertainty[2],   0.0,    0.0,    0.0,
+                0.0,                0.0,                0.0,                0.0,    0.0,    0.0,
+                0.0,                0.0,                0.0,                0.0,    0.0,    0.0,
+                0.0,                0.0,                0.0,                0.0,    0.0,    0.0};
+        accel.getAccel().setCovariance(accel_cov);
+        pub_accel.publish(accel);
     }
+*/
 
-    private void logPositionFromRawDataEvent(String event) {
-        logEvent("Calculated Position From Raw Data", event + "\n", mCurrentColor);
-    }
 
-    private void logVelocityFromRawDataEvent(String event) {
-        logEvent("Calculated Velocity From Raw Data", event + "\n", mCurrentColor);
-    }
-
-    private void logPositionError(String event) {
-        logEvent(
-                "Offset between the reported position and Google's WLS position based on reported "
-                        + "measurements",
-                event + "\n",
-                mCurrentColor);
-    }
-
-    private void logVelocityError(String event) {
-        logEvent(
-                "Offset between the reported velocity and "
-                        + "Google's computed velocity based on reported measurements ",
-                event + "\n",
-                mCurrentColor);
-    }
-
-    private void logPositionUncertainty(String event) {
-        logEvent("Uncertainty of the calculated position from Raw Data", event + "\n", mCurrentColor);
-    }
-
-    private void logVelocityUncertainty(String event) {
-        logEvent("Uncertainty of the calculated velocity from Raw Data", event + "\n", mCurrentColor);
-    }
-
-//    private synchronized int getNextColor() {
-//        ++mCurrentColorIndex;
-//        return mRgbColorArray[mCurrentColorIndex % mRgbColorArray.length];
-//    }
 
 }
