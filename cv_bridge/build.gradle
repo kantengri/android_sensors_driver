@@ -7,6 +7,13 @@ dependencies {
 //    compile "org.ros.rosjava_messages:sensor_msgs:[1.11,1.12)"
     compile project(':opencv3')
     compile project(':image')
+    implementation 'org.ros.rosjava_bootstrap:message_generation:[0.3, 0.4)'
+//    implementation 'org.ros.rosjava_messages:std_msgs'
+//    implementation 'org.ros.android_core:android_core_components:0.4.0'
+    implementation 'org.ros.rosjava_messages:sensor_msgs:1.12.7'
+    implementation 'org.ros.rosjava_messages:std_srvs:1.11.2'
+    implementation 'org.ros.rosjava_messages:std_msgs:0.5.11'
+
 }
 
 
@@ -14,7 +21,7 @@ android {
     compileSdkVersion 25
     buildToolsVersion "25.0.2"
     defaultConfig {
-        minSdkVersion 10
+        minSdkVersion 16
         targetSdkVersion 25
     }
     sourceSets {

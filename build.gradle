@@ -27,9 +27,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-task wrapper(type: Wrapper) {
-    gradleVersion = "2.14.1"
-}
+//task wrapper(type: Wrapper) {
+//    gradleVersion = "2.14.1"
+//}
 
 buildscript {
     apply from: "https://github.com/rosjava/android_core/raw/kinetic/buildscript.gradle"
